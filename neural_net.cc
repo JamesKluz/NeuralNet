@@ -14,11 +14,10 @@
 
 using namespace Eigen;
 
-NeuralNet::NeuralNet(int inputs, int hidden_nodes, int outputs, double s_coef, bool norm_on_correct){
+NeuralNet::NeuralNet(int inputs, int hidden_nodes, int outputs, double s_coef){
   num_inputs_ = inputs;
   num_outputs_ = outputs;
   num_hidden_ = hidden_nodes;
-  normalize_on_correction_ = norm_on_correct;
   sigmoid_coefficient_ = s_coef;
   weights_input_hidden_ = MatrixXd(hidden_nodes, inputs);
   weights_hidden_output_  = MatrixXd(outputs, hidden_nodes);
@@ -95,36 +94,22 @@ void NeuralNet::TrainNet(std::vector<double> &train_input, std::vector<double> &
   for(int i = 0; i < num_outputs_; ++i)
     error_vector(i, 0) = target_ouput[i] - output_vector(i, 0);
   MatrixXd hidden_error(num_hidden_, 1);
-  //check to see if we are going to normalize the transpose
-  if(normalize_on_correction_){
-    MatrixXd weights_hidden_output_normed(num_outputs_, num_hidden_);
-    //vector to store sums of rows of weight matrix
-    std::vector<double> sums(num_outputs_ , 0.0);
-    for(int i = 0; i < num_outputs_; ++i)
-      for(int j = 0; j < num_hidden_; ++j)
-        sums[i] += weights_hidden_output_(i, j);
-    //normalize the weight matrix
-    for(int i = 0; i < num_outputs_; ++i)
-      for(int j = 0; j < num_hidden_; ++j)
-        weights_hidden_output_normed(i, j) = weights_hidden_output_(i, j) / sums[i];
-    hidden_error = weights_hidden_output_normed.transpose() * error_vector;      
-  } else {
-    hidden_error = weights_hidden_output_.transpose() * error_vector;
-  }
   //now we correct the weights
   //vector for component-wise multiplication and addition:
-  //want temp[k] = 2 * learning_rate * Sigmoid_coefficient * error[i]*actual[k]*(1 - actual[i]) 
+  //want temp_1[k] = 2 * learning_rate * Sigmoid_coefficient * error[i]*actual[k]*(1 - actual[i]) 
   MatrixXd temp_1(num_outputs_, 1);
   for(int i = 0; i < num_outputs_; ++i)
-    temp_1(i, 0) = 2 * learn_rate * error_vector(i, 0) * output_vector(i, 0) * (1 - output_vector(i, 0));
+    temp_1(i, 0) = 2 * sigmoid_coefficient_ * error_vector(i, 0) * output_vector(i, 0) * (1 - output_vector(i, 0));
   //correct hidden to output weights
-  weights_hidden_output_ = weights_hidden_output_ + temp_1 * hidden_vector.transpose();
+  weights_hidden_output_ = weights_hidden_output_ + learn_rate * temp_1 * hidden_vector.transpose();
+  MatrixXd temp_2 = weights_hidden_output_.transpose() * temp_1;
   //vector for component-wise multiplication and addition:
-  MatrixXd temp_2(num_hidden_, 1);
+  //want temp_2[k] = 2 * learning_rate * Sigmoid_coefficient * error[i]*actual[k]*(1 - actual[i]) 
+  MatrixXd temp_3(num_hidden_, 1);
   for(int i = 0; i < num_hidden_; ++i)
-    temp_2(i, 0) = 2 * learn_rate * hidden_error(i, 0) * hidden_vector(i, 0) * (1 - hidden_vector(i, 0));
+    temp_3(i, 0) = 2 * sigmoid_coefficient_ * temp_2(i, 0) * hidden_vector(i, 0) * (1 - hidden_vector(i, 0));
   //correct hidden to output weights
-  weights_input_hidden_ = weights_input_hidden_ + temp_2 * input_vector.transpose();
+  weights_input_hidden_ = weights_input_hidden_ + learn_rate * temp_3 * input_vector.transpose();
 }
 
 void NeuralNet::Save(std::string save_file) const{
@@ -133,7 +118,7 @@ void NeuralNet::Save(std::string save_file) const{
     std::cout << "Failed to open save file, exiting\n";
     exit(1);
   }
-  out_stream << num_hidden_ << " " << num_inputs_ << " " << num_outputs_ << " " << sigmoid_coefficient_ << " " << normalize_on_correction_  << "\n";
+  out_stream << num_hidden_ << " " << num_inputs_ << " " << num_outputs_ << " " << sigmoid_coefficient_ << " " << "\n";
   for(int i = 0; i < num_hidden_; ++i)
     for(int j = 0; j < num_inputs_; ++j)
       out_stream << weights_input_hidden_(i, j) << " ";
@@ -154,7 +139,7 @@ void NeuralNet::Load(std::string load_file){
   std::string token;
   std::getline(in_stream, token);
   std::stringstream ss_dimensions(token);
-  ss_dimensions >> num_hidden_ >> num_inputs_ >> num_outputs_ >> sigmoid_coefficient_ >> normalize_on_correction_;
+  ss_dimensions >> num_hidden_ >> num_inputs_ >> num_outputs_ >> sigmoid_coefficient_;
   weights_input_hidden_ = MatrixXd(num_hidden_, num_inputs_);
   weights_hidden_output_  = MatrixXd(num_outputs_, num_hidden_);
   std::getline(in_stream, token);

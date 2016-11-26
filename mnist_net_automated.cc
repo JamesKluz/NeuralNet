@@ -1,77 +1,62 @@
-//A driver for testing the NueralNet class on the MNIST data
-//Usage:
-//To Test:
-//mnist_net test test_data.csv saved_net.txt
-//To Train:
-//Option: 1 (for a static learning rate)
-//mnist_net train train_data.csv file_to_save.txt learning_rate #epochs sigmoid_coefficient
-//Option: 2 (for a static learning rate)
-//mnist_net train train_data.csv file_to_save.txt learning_rate #epochs sigmoid_coefficient #of_steps_till_epsilon_decrease
-//note: at the nth epsilon decrease epsilon = epsilon/n
-
 #include <iostream>
 #include "neural_net.h"
 #include <fstream>
 
 double TestNet(NeuralNet &net, const std::string &data_file);
-void TrainNet(NeuralNet &net, const std::string &data_file, double epsilon, int epochs, int num_steps_change = -1);
+void TrainNet(NeuralNet &net, const std::string &traing_file, const std::string &test_file, double epsilon, int epochs, 
+              std::string save_file, int num_steps_change = -1);
 
-
-int main(int argc, char **argv){  
-  if (argc!=4 && argc!=7 && argc!=8) {
+int main(int argc, char **argv){
+  if (argc!=4) {
     std::cout << "Incorrect usage, correct usage:\n";
-    std::cout << "mnist_net {\"test\"} {input file} {load file}\n";
-    std::cout << "-OR-\nmnist_net {\"train\"} {input file} {save file} {learning rate} {epochs} {Sigmoid Coefficient}\n";
-    std::cout << "-OR-\nmnist_net {\"train\"} {input file} {save file} {Initial learn rate} {epochs} {Sigmoid Coefficient} {Steps until learning rate change}\n";
+    std::cout << "mnist_net_automated {instruction file} {train file} {test file}\n";
     return 0;
   } 
-  const std::string test_or_train(argv[1]); 
-  if(test_or_train == "test"){
-    const std::string loader(argv[3]);
-    NeuralNet mnist_net(loader);
-    const std::string data_file(argv[2]); 
-    double result = TestNet(mnist_net, data_file);
-    std::cout << "Net Accuracy: " << result << std::endl;
+  std::string instruction_string(argv[1]);  
+  std::string train(argv[2]);
+  std::string test(argv[3]);
+  std::string token;
+  std::ifstream instructions(instruction_string);
+  //get rid of header
+  std::getline(instructions, token);
+  double epsilon, sigmoid_coef;
+  int epochs, num_steps_change;
+  int hidden_node_number;
+  std::string save_best_name;
 
-  } else if (test_or_train == "train") {
-    const std::string data_file(argv[2]);
-    const std::string save_file(argv[3]);
-    double epsilon = std::stod(argv[4]);
-    int epochs = std::stoi(argv[5]);
-    double sig_coef = std::stod(argv[6]);
-    NeuralNet mnist_net{784, 397, 10, sig_coef};
-    if(argc == 7){
-      TrainNet(mnist_net, data_file, epsilon, epochs);
-      mnist_net.Save(save_file);
-    }
-    else if (argc == 8){
-      int num_steps_change = std::stoi(argv[7]);
-      TrainNet(mnist_net, data_file, epsilon, epochs, num_steps_change);
-      mnist_net.Save(save_file);
+  while(std::getline(instructions, token)){
+    std::cout << "***************************************";
+    std::stringstream ss(token);
+    ss >> epsilon >> sigmoid_coef >> epochs >> num_steps_change >> hidden_node_number >> save_best_name;
+    NeuralNet mnist_net(784, hidden_node_number, 10, sigmoid_coef);
+    if(num_steps_change < 1){
+      std::cout << "For fixed epsilon = " << epsilon << ", sc = " << sigmoid_coef << ", epochs = " << epochs << ",\n";
+      TrainNet(mnist_net, train, test, epsilon, epochs, save_best_name, -1);
+    } else {
+      std::cout << "For initial epsilon = " << epsilon << " and decreasing every " << num_steps_change << " trainging instances" << ", sc = " << sigmoid_coef << ", epochs = " << epochs << ",\n";
+      TrainNet(mnist_net, train, test, epsilon, epochs, save_best_name, num_steps_change);
     }
   }
   return 0;
 }
 
-void TrainNet(NeuralNet &net, const std::string &data_file, double epsilon, int epochs, int num_steps_change){
+void TrainNet(NeuralNet &net, const std::string &data_file, const std::string &test_file, double epsilon, int epochs, 
+              std::string save_file, int num_steps_change){
   bool decreasing_learn = true;
   if(num_steps_change < 1)
     decreasing_learn = false;
   double learn_rate = epsilon;
   int counter = 0;
   int epsilon_divisor = 1;
+  double best_accuracy = 0.0;
   for(int x = 0; x < epochs; ++x){
     std::ifstream in_stream(data_file);
-    std::cout << "******************** Epoch_" << x+1 << " **********************\n";
     if(!in_stream.is_open()){
       std::cout << "Failed to open training file, exiting\n";
       exit(1);
     }
     std::string token;
     while(std::getline(in_stream, token)){
-      if(counter % 1000 == 0){
-        std::cout << counter << " training instances\n";
-      }
       ++counter;
       std::stringstream ss(token);
       std::vector<double> trainer;
@@ -103,6 +88,13 @@ void TrainNet(NeuralNet &net, const std::string &data_file, double epsilon, int 
       }
     }
     in_stream.close();
+    double accuracy = TestNet(net, test_file);
+    if(best_accuracy < accuracy){
+      best_accuracy = accuracy;
+      std::cout << "New best accuracy, saving to file: \"" << save_file << "\"\n";
+      net.Save(save_file);
+    }
+    std::cout << "Accuracy at epoch " << x + 1 << " :" << accuracy << std::endl;
   }
 }
 
@@ -118,9 +110,6 @@ double TestNet(NeuralNet &net, const std::string &data_file){
   int total = 0;
   //get input vectors and update weights
   while(std::getline(in_stream, token)){
-    if(counter % 1000 == 0){
-      std::cout << counter << " instances tested.\n";
-    }
     ++counter;
     std::stringstream ss(token);
     std::vector<double> tester;

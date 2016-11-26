@@ -14,7 +14,7 @@ class NeuralNet{
   //s_coef is a coefficient in front of the independent variable x in the
   //sigmoid function. The larger x, the more closely the sigmoid represents 
   //a step function
-  NeuralNet(int inputs, int hidden_nodes, int outputs, double s_coef = 1.0, bool norm_on_correct = false);
+  NeuralNet(int inputs, int hidden_nodes, int outputs, double s_coef = 1.0);
 
   //Constructor for loading a saved net
   NeuralNet(std::string loader);
@@ -53,7 +53,6 @@ class NeuralNet{
   int num_inputs_;
   int num_outputs_;
   int num_hidden_;
-  bool normalize_on_correction_;
   double sigmoid_coefficient_;
 
   MatrixXd weights_input_hidden_;
